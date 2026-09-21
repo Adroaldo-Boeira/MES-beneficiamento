@@ -19,8 +19,9 @@ export function validarLote(lote) {
     errors.produtor = 'Informe o produtor.'
   }
 
-  if (!lote.placa?.trim()) {
-    errors.placa = 'Informe a placa do veículo.'
+  // Placa é opcional — só valida formato/tamanho se algo foi digitado.
+  if (lote.placa?.trim() && lote.placa.trim().length > 8) {
+    errors.placa = 'Placa inválida.'
   }
 
   const pesoBruto = Number(lote.peso_bruto)
@@ -33,10 +34,6 @@ export function validarLote(lote) {
     errors.umidade = 'Informe a umidade.'
   } else if (umidade < UMIDADE_MIN || umidade > UMIDADE_MAX) {
     errors.umidade = `Umidade deve estar entre ${UMIDADE_MIN}% e ${UMIDADE_MAX}%.`
-  }
-
-  if (!lote.silo?.trim()) {
-    errors.silo = 'Informe o silo de destino.'
   }
 
   return { valid: Object.keys(errors).length === 0, errors }

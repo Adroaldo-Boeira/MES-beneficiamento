@@ -39,7 +39,7 @@ export default function Dashboard({ empresaId }) {
     const [lotesRes, laudosRes] = await Promise.all([
       supabase
         .from('lotes')
-        .select('id, codigo_lote, peso_bruto, umidade, silo')
+        .select('id, codigo_lote, produtor, peso_bruto, umidade')
         .eq('id_empresa', empresaId)
         .order('id', { ascending: false }),
       supabase
@@ -74,14 +74,14 @@ export default function Dashboard({ empresaId }) {
     return { totalLotes, pesoTotal, umidadeMedia, totalLaudos }
   }, [lotes, laudos])
 
-  const pesoPorSilo = useMemo(() => {
+  const pesoPorProdutor = useMemo(() => {
     const mapa = new Map()
     for (const lote of lotes) {
-      const silo = lote.silo || 'Não informado'
-      mapa.set(silo, (mapa.get(silo) || 0) + Number(lote.peso_bruto || 0))
+      const produtor = lote.produtor || 'Não informado'
+      mapa.set(produtor, (mapa.get(produtor) || 0) + Number(lote.peso_bruto || 0))
     }
     return Array.from(mapa.entries())
-      .map(([silo, peso]) => ({ silo, peso: Math.round(peso) }))
+      .map(([produtor, peso]) => ({ produtor, peso: Math.round(peso) }))
       .sort((a, b) => b.peso - a.peso)
       .slice(0, 8)
   }, [lotes])
@@ -154,14 +154,14 @@ export default function Dashboard({ empresaId }) {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
         <div className="card p-5 xl:col-span-3">
-          <h2 className="mb-4 text-base font-bold text-industrial-900">Peso bruto por silo</h2>
-          {pesoPorSilo.length === 0 ? (
+          <h2 className="mb-4 text-base font-bold text-industrial-900">Peso bruto por produtor</h2>
+          {pesoPorProdutor.length === 0 ? (
             <p className="py-12 text-center text-sm text-industrial-400">Sem dados de lotes ainda.</p>
           ) : (
             <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={pesoPorSilo} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+              <BarChart data={pesoPorProdutor} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e3e8ea" vertical={false} />
-                <XAxis dataKey="silo" tick={{ fontSize: 12, fill: '#586b76' }} />
+                <XAxis dataKey="produtor" tick={{ fontSize: 12, fill: '#586b76' }} />
                 <YAxis tick={{ fontSize: 12, fill: '#586b76' }} />
                 <Tooltip
                   formatter={(value) => [`${value.toLocaleString('pt-BR')} kg`, 'Peso bruto']}
@@ -212,18 +212,18 @@ export default function Dashboard({ empresaId }) {
               <thead className="sticky top-0 bg-white">
                 <tr className="border-b border-industrial-200 text-xs uppercase tracking-wide text-industrial-500">
                   <th className="pb-2.5 pr-4 font-semibold">Código</th>
+                  <th className="pb-2.5 pr-4 font-semibold">Produtor</th>
                   <th className="pb-2.5 pr-4 font-semibold">Peso bruto</th>
-                  <th className="pb-2.5 pr-4 font-semibold">Umidade</th>
-                  <th className="pb-2.5 font-semibold">Silo</th>
+                  <th className="pb-2.5 font-semibold">Umidade</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-industrial-100">
                 {lotes.map((lote) => (
                   <tr key={lote.id} className="text-industrial-700">
                     <td className="py-2.5 pr-4 font-semibold text-industrial-900">{lote.codigo_lote}</td>
+                    <td className="py-2.5 pr-4">{lote.produtor}</td>
                     <td className="py-2.5 pr-4">{Number(lote.peso_bruto).toLocaleString('pt-BR')} kg</td>
-                    <td className="py-2.5 pr-4">{Number(lote.umidade).toFixed(1)}%</td>
-                    <td className="py-2.5">{lote.silo}</td>
+                    <td className="py-2.5">{Number(lote.umidade).toFixed(1)}%</td>
                   </tr>
                 ))}
               </tbody>

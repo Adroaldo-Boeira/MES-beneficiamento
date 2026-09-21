@@ -36,12 +36,15 @@ src/
   lib/
     supabaseClient.js   # cliente Supabase (usa variáveis de ambiente)
     validation.js       # regras de validação de negócio (lote, laudo)
+    loteCode.js          # geração do código sugerido AAAAMMDD-XX
   hooks/
     useEmpresas.js       # carrega empresas e mantém a empresa ativa
+    useProdutores.js       # carrega/cadastra produtores (tabela `produtores`)
   components/
     Sidebar.jsx           # navegação lateral
     Topbar.jsx             # cabeçalho + seletor de empresa
     Toast.jsx               # notificações de sucesso/erro
+    NovoProdutorModal.jsx    # modal de cadastro rápido de produtor
     FormField.jsx            # campo de formulário padronizado
     StatCard.jsx               # card de estatística do dashboard
   pages/

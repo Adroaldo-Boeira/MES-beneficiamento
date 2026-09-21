@@ -1,8 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
-import { PackagePlus, Truck, Loader2 } from 'lucide-react'
+import { PackagePlus, Truck, Loader2, UserPlus } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { validarLote, UMIDADE_MIN, UMIDADE_MAX } from '../lib/validation'
+import { gerarCodigoLoteSugerido } from '../lib/loteCode'
+import { useProdutores } from '../hooks/useProdutores'
 import FormField from '../components/FormField'
+import NovoProdutorModal from '../components/NovoProdutorModal'
 
 const LOTE_VAZIO = {
   codigo_lote: '',
@@ -10,7 +13,6 @@ const LOTE_VAZIO = {
   placa: '',
   peso_bruto: '',
   umidade: '',
-  silo: '',
 }
 
 export default function Recebimento({ empresaId, onToast }) {
@@ -19,13 +21,17 @@ export default function Recebimento({ empresaId, onToast }) {
   const [saving, setSaving] = useState(false)
   const [lotesRecentes, setLotesRecentes] = useState([])
   const [loadingLotes, setLoadingLotes] = useState(true)
+  const [codigoEditadoManualmente, setCodigoEditadoManualmente] = useState(false)
+  const [modalProdutorAberto, setModalProdutorAberto] = useState(false)
+
+  const { produtores, criarProdutor } = useProdutores()
 
   const carregarLotesRecentes = useCallback(async () => {
     if (!empresaId) return
     setLoadingLotes(true)
     const { data, error } = await supabase
       .from('lotes')
-      .select('id, codigo_lote, produtor, placa, peso_bruto, umidade, silo')
+      .select('id, codigo_lote, produtor, placa, peso_bruto, umidade')
       .eq('id_empresa', empresaId)
       .order('id', { ascending: false })
       .limit(8)
@@ -38,9 +44,37 @@ export default function Recebimento({ empresaId, onToast }) {
     carregarLotesRecentes()
   }, [carregarLotesRecentes])
 
+  // Sugere automaticamente o próximo código do dia (AAAAMMDD-XX) assim que
+  // os lotes recentes carregam, desde que o operador não tenha digitado
+  // nada manualmente ainda no campo.
+  useEffect(() => {
+    if (codigoEditadoManualmente) return
+    if (loadingLotes) return
+
+    const codigosDeHoje = lotesRecentes.map((l) => l.codigo_lote)
+    const sugestao = gerarCodigoLoteSugerido(codigosDeHoje)
+    setForm((prev) => (prev.codigo_lote ? prev : { ...prev, codigo_lote: sugestao }))
+  }, [lotesRecentes, loadingLotes, codigoEditadoManualmente])
+
   function handleChange(campo, valor) {
     setForm((prev) => ({ ...prev, [campo]: valor }))
     if (errors[campo]) setErrors((prev) => ({ ...prev, [campo]: undefined }))
+  }
+
+  function handleCodigoChange(valor) {
+    setCodigoEditadoManualmente(true)
+    handleChange('codigo_lote', valor)
+  }
+
+  async function handleCriarProdutor(nome) {
+    const { data, error } = await criarProdutor(nome)
+    if (error) {
+      onToast({ type: 'error', message: `Erro ao cadastrar produtor: ${error.message}` })
+      return
+    }
+    onToast({ type: 'success', message: `Produtor "${data.nome}" cadastrado.` })
+    handleChange('produtor', data.nome)
+    setModalProdutorAberto(false)
   }
 
   async function handleSubmit(e) {
@@ -60,10 +94,9 @@ export default function Recebimento({ empresaId, onToast }) {
       id_empresa: empresaId,
       codigo_lote: form.codigo_lote.trim(),
       produtor: form.produtor.trim(),
-      placa: form.placa.trim().toUpperCase(),
+      placa: form.placa?.trim() ? form.placa.trim().toUpperCase() : null,
       peso_bruto: Number(form.peso_bruto),
       umidade: Number(form.umidade),
-      silo: form.silo.trim(),
     })
     setSaving(false)
 
@@ -74,6 +107,7 @@ export default function Recebimento({ empresaId, onToast }) {
 
     onToast({ type: 'success', message: `Lote "${form.codigo_lote}" cadastrado com sucesso.` })
     setForm(LOTE_VAZIO)
+    setCodigoEditadoManualmente(false)
     carregarLotesRecentes()
   }
 
@@ -90,22 +124,41 @@ export default function Recebimento({ empresaId, onToast }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <FormField
             label="Código do lote"
-            placeholder="Ex.: LT-2026-0142"
+            placeholder="AAAAMMDD-XX"
             value={form.codigo_lote}
-            onChange={(e) => handleChange('codigo_lote', e.target.value)}
+            onChange={(e) => handleCodigoChange(e.target.value)}
             error={errors.codigo_lote}
           />
 
-          <FormField
-            label="Produtor"
-            placeholder="Nome do produtor rural"
-            value={form.produtor}
-            onChange={(e) => handleChange('produtor', e.target.value)}
-            error={errors.produtor}
-          />
+          <div>
+            <label className="field-label">Produtor</label>
+            <div className="flex gap-2">
+              <select
+                className={`field-input ${errors.produtor ? 'field-input-error' : ''}`}
+                value={form.produtor}
+                onChange={(e) => handleChange('produtor', e.target.value)}
+              >
+                <option value="">Selecione um produtor...</option>
+                {produtores.map((p) => (
+                  <option key={p.id} value={p.nome}>
+                    {p.nome}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setModalProdutorAberto(true)}
+                className="btn-secondary shrink-0 px-3"
+                title="Cadastrar novo produtor"
+              >
+                <UserPlus className="h-4 w-4" />
+              </button>
+            </div>
+            {errors.produtor && <p className="field-error">{errors.produtor}</p>}
+          </div>
 
           <FormField
-            label="Placa do veículo"
+            label="Placa do veículo (opcional)"
             placeholder="Ex.: ABC1D23"
             value={form.placa}
             onChange={(e) => handleChange('placa', e.target.value.toUpperCase())}
@@ -136,14 +189,6 @@ export default function Recebimento({ empresaId, onToast }) {
               error={errors.umidade}
             />
           </div>
-
-          <FormField
-            label="Silo de destino"
-            placeholder="Ex.: Silo 3"
-            value={form.silo}
-            onChange={(e) => handleChange('silo', e.target.value)}
-            error={errors.silo}
-          />
 
           <button type="submit" className="btn-primary w-full" disabled={saving}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
@@ -177,8 +222,7 @@ export default function Recebimento({ empresaId, onToast }) {
                   <th className="pb-2.5 pr-4 font-semibold">Produtor</th>
                   <th className="pb-2.5 pr-4 font-semibold">Placa</th>
                   <th className="pb-2.5 pr-4 font-semibold">Peso bruto</th>
-                  <th className="pb-2.5 pr-4 font-semibold">Umidade</th>
-                  <th className="pb-2.5 font-semibold">Silo</th>
+                  <th className="pb-2.5 font-semibold">Umidade</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-industrial-100">
@@ -186,10 +230,9 @@ export default function Recebimento({ empresaId, onToast }) {
                   <tr key={lote.id} className="text-industrial-700">
                     <td className="py-2.5 pr-4 font-semibold text-industrial-900">{lote.codigo_lote}</td>
                     <td className="py-2.5 pr-4">{lote.produtor}</td>
-                    <td className="py-2.5 pr-4">{lote.placa}</td>
+                    <td className="py-2.5 pr-4">{lote.placa || '—'}</td>
                     <td className="py-2.5 pr-4">{Number(lote.peso_bruto).toLocaleString('pt-BR')} kg</td>
-                    <td className="py-2.5 pr-4">{Number(lote.umidade).toFixed(1)}%</td>
-                    <td className="py-2.5">{lote.silo}</td>
+                    <td className="py-2.5">{Number(lote.umidade).toFixed(1)}%</td>
                   </tr>
                 ))}
               </tbody>
@@ -197,6 +240,12 @@ export default function Recebimento({ empresaId, onToast }) {
           </div>
         )}
       </div>
+
+      <NovoProdutorModal
+        open={modalProdutorAberto}
+        onClose={() => setModalProdutorAberto(false)}
+        onCreate={handleCriarProdutor}
+      />
     </div>
   )
 }
